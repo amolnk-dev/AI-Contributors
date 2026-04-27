@@ -1,0 +1,114 @@
+commit	val_metric	memory_gb	diff_lines	status	description	reject_reason
+8af616d	80.072172	0.0	0	keep	baseline	-
+65ab0bd	80.300122	0.0	20	keep	pool ground truth priors across all 5 seeds	-
+4ac75ec	80.407478	0.0	5	keep	GT-calibrated global transitions	-
+07a40cb	80.621764	0.0	2	keep	PROB_FLOOR 0.001 to 0.0001	-
+f90c0b6	89.014199	0.0	80	keep	coastal/inland split for plains+forests with distance-based GT tables	-
+uncommit	89.343843	0.0	15	keep	disable noisy Bayesian obs layer + reduce calibration blend 0.5→0.2	-
+89ac76f	89.512792	0.0	29	keep	exposed coastal split (2+ ocean neighbors for port tables)	-
+4875ee2	89.513903	0.0	7	keep	coastal settlement port priors + fix inland P(port)=0	-
+79905d7	89.732869	0.0	5	keep	apply Layer 3 priors to all cells (not just unobserved)	-
+4d98636	89.740081	0.0	2	keep	tune calibration blend_weight 0.20 to 0.16	-
+3aac15b	89.425969	0.0	3	discard	align calibration coastal key with exposed_coastal	mismatched lookup keys
+reverted	89.466994	0.0	5	discard	regenerate calibration priors with exposed_coastal keys	over-smoothing with GT-derived tables
+fffc9a1	89.768145	0.0	20	keep	boost P(settlement) for forests adjacent to settlement cells	-
+14f1d60	89.790387	0.0	19	keep	boost P(settlement) for plains adjacent to settlement cells	-
+reverted	89.504375	0.0	15	discard	per-seed scaling by initial settlement count	too aggressive scaling
+reverted	89.773624	0.0	8	discard	adj_forest boost for plains P(settlement)	marginal loss vs baseline
+e80623f	90.605182	0.0	142	keep	add GBT ensemble (blend=0.5) trained on R1 GT features	-
+f96e630	91.906229	0.0	14	keep	add dist2/nearby_settlements/total_settlements to GBT features	-
+e89bdbd	92.153153	0.0	0	keep	increase GBT to 200 trees (LOSO-validated: 91.18)	-
+03a6251	92.677288	0.0	12	keep	add dist_ocean feature to GBT	-
+d9c24c4	93.646245	0.0	18	keep	add dist_mountain/forests_r2/y,x coords to GBT (19 features, LOSO=91.68)	-
+789ec63	94.097019	0.0	1	keep	increase GBT blend weight 0.5 to 0.6 (LOSO=91.73)	-
+5d39d5f	94.114200	0.0	13	keep	add settlements_r3 + scan radius 8 (20 features)	-
+2round	93.346234	0.0	0	keep	GBT trained on R1+R2 GT combined (R2 generalization: 94.3 vs 88.8 before)	-
+reverted	93.307500	0.0	5	discard	add n_ports feature to GBT	no improvement
+398f0cc	93.348005	0.0	2	keep	disable calibration layer (GBT subsumes it)	-
+8a3a6d7	93.284398	0.0	3	keep	switch to XGBoost with L2 reg (lambda=2.0, cross-round R2=88.69 vs 88.49)	-
+a5c8fa4	93.370124	0.0	12	keep	add settlement band features r12/r57 (22 features, cross-round R2=88.73)	-
+2598be8	92.995804	0.0	1	keep	tune blend to 0.5 + XGBoost L2=2.0 (cross-round R2=88.76)	-
+b20e30b	92.808397	0.0	36	keep	recalibrate tables with R1+R2 pooled (cross-round R2=91.27!)	-
+b92d8a7	92.835419	0.0	7	keep	recalibrate settlement priors with R1+R2 pooled	-
+7cab16e	92.835419	0.0	4	keep	recalibrate EMPIRICAL_TRANSITIONS R1+R2	-
+9fba42d	93.101200	0.0	12	keep	add dist_port feature (23 features total)	-
+reverted	93.087600	0.0	3	discard	add n_ports global feature	no improvement
+bb88a9b	93.098082	0.0	-28	keep	remove redundant adj_settlement boosts (simplification)	-
+reverted	93.076600	0.0	20	discard	add ocean_r3/plains_r3 features	redundant with dist_ocean
+1179241	93.739716	0.0	36	keep	terrain-specific XGBoost (plains/forest/settlement specialists)	-
+reverted	93.754645	0.0	12	discard	add dx/dy direction to nearest settlement	marginal +0.015 not worth complexity
+26d5412	93.131509	0.0	1	keep	reduce blend 0.5→0.4 for terrain-specific (cross-round R2=91.47 vs 91.08)	-
+tested	91.4654	0.0	0	discard	round-level obs stats as XGB features	no cross-round improvement
+tested	92.9391	0.0	0	discard	observation-based settlement rate scaling	marginal at best
+b90517f	93.169200	0.0	23	keep	add connected component features (comp_size, comp_settlements)	-
+retrain	93.253054	0.0	0	keep	XGBoost with subsample=0.9 colsample=0.9 (cross-round R2=91.83)	-
+9dc085a	93.286334	0.0	31	keep	add dist_to_edge/bfs_dist/passable_5x5 (28 features, R2=91.85)	-
+b5946e9	93.269900	0.0	10	keep	add land_ratio_r3 (29 features)	-
+5247c90	93.281400	0.0	2	keep	add land_r3/(1+bfs_dist) interaction (30 features)	-
+tested	-	-	-	discard	voronoi territory size	non-monotonic, no signal
+tested	-	-	-	discard	voronoi boundary detection	marginal P(ruin) +0.003
+tested	-	-	-	discard	residual prediction approach	worse than blend (91.39 vs 91.81)
+tested	-	-	-	discard	center of mass distance	near-zero correlation
+retrain	93.881761	0.0	0	keep	XGBoost mcw=3 + 30 features + 2-round (R1=93.88, cross-round R2=91.85)	-
+8ea34f3	93.761995	0.0	38	keep	observation ratio correction Layer 7 (cross-round R2=92.08!)	-
+3c900cc	93.797047	0.0	4	keep	per-class correction strengths (cross-round R2=92.14!)	-
+2acc285	92.730000	0.0	3	keep	uniform 0.7 obs correction (R4 would be 93.84 vs 91.80 submitted!)	-
+a797f68	92.369840	0.0	36	keep	recalibrate all tables with 4 rounds GT (more robust avg)	-
+c8ef8a0	92.336447	0.0	2	keep	LORO-optimal correction [.4,.9,.5,.9,.6] (LORO avg=91.67!)	-
+65a5f72	92.336447	0.0	23	keep	re-enable Layer 2 + repeat query strategy (5vp×2rep)	-
+373adf8	91.330022	0.0	1	keep	blend=0.3 with 4-round model (R4 cross-round=94.06)	-
+aaa4bf0	91.434271	0.0	3	keep	L7 full correction=1.0 (LOO avg=92.24, best ever cross-round)	-
+6d2bd6f	91.537670	0.0	6	keep	agent-optimized L7 [1.38,.90,.44,.61,1.16,0] (avg=93.10!)	-
+6c3fb4b	91.141385	0.0	95	keep	per-terrain L7 + revert Layer 2 + restore query alloc (agent findings)	-
+0d0390b	91.729444	0.0	-48	keep	revert to global L7 (simpler, better, confirmed by 3 agents)	-
+6722cd2	-	0.0	1	keep	blend=0.25 (R4 cross-round 94.19 vs 94.14 at 0.3)	-
+0d0390b	91.729444	0.0	-48	keep	revert to global L7 (confirmed by 3 agents)	-
+3bc435e	91.537670	0.0	6	keep	agent-optimized L7 [1.38,.90,.44,.61,1.16]	-
+1b67662	-	0.0	413	keep	initial simulator WIP (scores ~11, needs calibration)	-
+37baf98	86.46	0.0	14	keep	per-terrain GBT blend — forest=0.70 (R5 +1.78!)	-
+1819ba8	86.94	0.0	5	keep	per-terrain blend p=0.30 f=0.70 s=0.30	-
+d693784	88.98	0.0	5	keep	higher blend p=0.50 f=0.85 s=0.50 (R4=95.74 R5=88.98!)	-
+62632a1	89.43	0.0	3	keep	push blend p=0.55 f=0.90 s=0.55 (R4=95.83 R5=89.43!)	-
+34e728d	89.76	0.0	2	keep	p=0.60 f=0.90 s=0.60 (R4=95.92 R5=89.76 avg=92.84!)	-
+bb7cdeb	90.08	0.0	2	keep	p=0.65 f=0.90 s=0.65 (R4=96.00 R5=90.08 avg=93.04!)	-
+a1feea3	90.36	0.0	2	keep	p=0.70 f=0.90 s=0.70 (R4=96.06 R5=90.36 avg=93.21!)	-
+e4dd433	90.63	0.0	2	keep	p=0.75 f=0.90 s=0.75 (R4=96.12 R5=90.63 avg=93.38!)	-
+6d20763	90.87	0.0	2	keep	p=0.80 f=0.90 s=0.80 (R4=96.17 R5=90.87 avg=93.52)	-
+5acd059	91.08	0.0	2	keep	p=0.85 f=0.90 s=0.85 (R4=96.20 R5=91.08 avg=93.64)	-
+1e6fd6c	91.28	0.0	2	keep	uniform 0.90 (R4=96.21 R5=91.28 avg=93.75)	-
+bd32b58	91.54	0.0	2	keep	uniform 0.95 (R4=96.21 R5=91.54 avg=93.88!)	-
+d9973fd	91.76	0.0	2	discard	pure XGBoost 1.0 (R4=96.16 R5=91.76 — R4 drops)	R4 slightly worse
+a8f5731	89.49	0.0	51	keep	R4-era tables + blend=0.25 + agent L7 (LORO avg=89.49!)	-
+56ee060	89.68	0.0	1	keep	blend=0.30 (LORO avg=89.68, agent-validated best)	-
+25c998d	90.87	0.0	2	keep	p=0.80 f=0.90 s=0.80 (R4=96.17 R5=90.87 avg=93.52!)
+fa5e61c	89.219609	0.0	0	keep	LORO baseline: blend=0.35 L7=[1.20,0.80,0.44,0.80,1.30,0]	-
+1858383	89.201662	0.0	23	discard	stacking: heuristic preds as XGB features (36 features)	no improvement
+8c0ecb1	0.000000	0.0	28	crash	multi:softprob classifier	non-contiguous class labels
+03b5dc8	89.028527	0.0	28	discard	residual learning: XGB predicts GT-heuristic corrections	worse than direct prediction
+225f38a	84.443356	0.0	2	keep	widen L7 clamp [0.80, 1.25] (R4=91.93 R6=82.55)
+64deaed	84.347338	0.0	17	discard	per-terrain blend (p=0.40 f=0.45 s=0.30)	R1/R2/R4/R6 regressed
+ec6fe48	84.332017	0.0	1	discard	L7 settlement strength 0.80->1.00	R7 worse 64.05
+a7bb9aa	84.118673	0.0	49	discard	LightGBM num_leaves=31	R5 drops to 83.80
+e155e4b	84.434661	0.0	1	discard	L7 empty=1.00 forest=1.50	flat, R4 slightly worse
+d667b59	83.996817	0.0	24	discard	global features (settl_ratio, forest_ratio, n_settl_norm)	R7=68.19(+3.7!) but R2=89.92 R6=78.49
+cc48576	84.440518	0.0	3	discard	XGBoost 400 trees + lr=0.05 (249s)	no improvement, 3x slower
+5d70fe7	84.442242	0.0	149	discard	recalibrated tables + Layer 3 (R5=85.93 R7=66.59 but R1/R2 drop)	wash
+0c4cf8d	82.576861	0.0	4	discard	skip Layer 3 with calibrated tables	R6 drops to 74.68
+8b5f981	84.441600	0.0	1	discard	settlement XGBoost depth=5	negligible change
+---	-	-	-	-	--- R7 POST-MORTEM RESEARCH (6-fold LORO incl R7) ---	-
+safe-l7	84.252887	0.0	6	keep	safe L7: zero port/ruin + clamp [0.85,1.20] + obs gating	-
+recalib	-	0.0	45	keep	recalibrate all tables from R1-R7 GT (30 maps, 3x data)	-
+obs-l7	84.440000	0.0	0	discard	observation-aware L7 (obs region only)	100% coverage, zero diff
+ensemble	84.440000	0.0	0	discard	ensemble no-L7 + safe-L7	-0.52 avg, L7 too valuable on R4/R6
+sim-fit	47.77-71.57	0.0	0	discard	simulator with obs-fitted params	far worse than heuristic+GBT
+lgbm	84.118673	0.0	49	discard	LightGBM leaf-wise	R5 drops
+stats37	84.940000	0.0	35	keep	settlement stats as 7 XGB features (37 total): R6+3.62 R7+1.86	-
+ff19dfa	-	0.0	127	keep	PRODUCTION: stats+recalib+safeL7 combined	-
+f809175	84.565888	0.0	1	keep	widen L7 settlement lower clamp 0.50 (R8=86.47 +2.59)	-
+2f32954	86.526200	0.0	1	keep	EMP_BLEND=0.40 (was 0.45, +0.008)
+9c9405c	86.531969	0.0	2	keep	XGB depth=5 for forest+settl (was 4, +0.006)
+eb62f29	86.569806	0.0	10	keep	weight XGB training by round weight (+0.038)
+a60eac7	86.659267	0.0	1	keep	GBT blend p=0.35 f=0.45 s=0.55 (+0.089)
+f2649f6	86.738029	0.0	1	keep	GBT blend p=0.40 f=0.50 s=0.60 (+0.079)
+3d0a2b7	86.806097	0.0	1	keep	GBT blend p=0.45 f=0.55 s=0.65 (+0.068)
+c89b3e8	86.863399	0.0	1	keep	GBT blend p=0.50 f=0.60 s=0.70 (+0.057)

@@ -1,21 +1,57 @@
-MTF License
+# Astar Island — Viking Civilisation Prediction
 
-Copyright (c) 2026 AI contributors
+**Weight**: 25% of total score
+**Type**: Observation + probabilistic prediction (REST API client)
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+## Quick Start
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+```bash
+# Set auth token (grab JWT from app.ainm.no cookies)
+export ASTAR_TOKEN="your-jwt-token"
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
-OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+# Run for active round
+python run.py
+
+# Dry run (no submission)
+python run.py --dry-run --visualize
+
+# Resume from checkpoint after crash
+python run.py --resume
+
+# Analyze completed round (extracts calibration)
+python analyze.py [round_id]
+```
+
+## Architecture
+
+Runner-first design — no FastAPI server. We call the competition API, not the other way around.
+
+```
+run.py          Main runner: fetch → observe → predict → submit
+client.py       HTTP client (rate limit, budget tracking, auth detection)
+model.py        Multi-layer prediction engine + ensemble
+utils.py        Grid parsing, viewport strategy, normalization, visualization
+analyze.py      Post-round ground truth analysis → calibration.json
+dtos.py         Pydantic models + terrain mapping constants
+```
+
+## Prediction Model
+
+5-layer heuristic:
+
+1. **Static** — Ocean, mountain, deep forest → deterministic
+2. **Observed** — Frequency distribution from viewport queries
+3. **Unobserved priors** — Based on initial terrain + adjacency (forests, coast, settlements)
+4. **Cross-seed transfer** — Pool observations from other seeds with matching initial terrain
+5. **Calibration** — Learned priors from past round ground truth
+
+## Query Strategy
+
+50 queries / 5 seeds = 10 per seed. Focus on dynamic regions (settlement neighborhoods).
+Greedy set-cover for viewport placement. Repeat same viewport to build frequency estimates.
+
+## Tests
+
+```bash
+python -m pytest tests/ -v
+```
