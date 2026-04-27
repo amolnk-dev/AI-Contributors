@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!--
+  Astar Island Prediction Inspector
+  ==================================
+
+  Usage:
+    1. Generate data:
+       cd tasks/astar-island && python viz/generate_viz_data.py
+
+    2. Serve the viz directory (needed for JSON loading):
+       cd tasks/astar-island/viz && python -m http.server 8080
+
+    3. Open in browser:
+       http://localhost:8080/viz.html
+
+  Features:
+    - 4 side-by-side 40x40 grids: Initial | Prediction | Ground Truth | Error
+    - Color-coded terrain (6 classes)
+    - KL divergence heatmap (white=good, red=bad)
+    - Round/seed selector dropdowns
+    - Cell tooltip with 6-class probability vector (pred vs GT)
+    - Summary stats: per-round score, per-class error breakdown
+-->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Astar Island — Prediction Inspector</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    padding: 16px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    text-align: center;
+    margin-bottom: 4px;
+    font-size: 22px;
+    color: #fff;
+  }
+
+  .subtitle {
+    text-align: center;
+    color: #888;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .controls label {
+    font-size: 13px;
+    color: #aaa;
+  }
+
+  .controls select {
+    background: #2a2a4a;
+    color: #fff;
+    border: 1px solid #444;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .controls select:hover {
+    border-color: #666;
+  }
+
+  .score-badge {
+    background: #2a2a4a;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .score-badge .value {
+    color: #4ecdc4;
+  }
+
+  .grids-container {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+
+  .grid-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .grid-panel .grid-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #ccc;
+  }
+
+  canvas {
+    border: 1px solid #333;
+    border-radius: 4px;
+    cursor: crosshair;
+    image-rendering: pixelated;
+  }
+
+  .tooltip-container {
+    position: fixed;
+    pointer-events: none;
+    z-index: 1000;
+    background: #2a2a4a;
+    border: 1px solid #555;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12px;
+    line-height: 1.5;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    display: none;
+    min-width: 280px;
+  }
+
+  .tooltip-container .cell-coords {
+    font-weight: 600;
+    color: #4ecdc4;
+    margin-bottom: 4px;
+  }
+
+  .tooltip-container .prob-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .tooltip-container .prob-table th {
+    text-align: left;
+    color: #888;
+    font-weight: 500;
+    padding: 1px 6px;
+    font-size: 11px;
+  }
+
+  .tooltip-container .prob-table td {
+    padding: 1px 6px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+  }
+
+  .tooltip-container .prob-table .bar-cell {
+    width: 60px;
+  }
+
+  .tooltip-container .prob-bar {
+    height: 8px;
+    border-radius: 2px;
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  .tooltip-container .kl-line {
+    margin-top: 4px;
+    color: #ff6b6b;
+    font-weight: 500;
+  }
+
+  .stats-container {
+    max-width: 900px;
+    margin: 0 auto 20px;
+  }
+
+  .stats-container h3 {
+    font-size: 15px;
+    margin-bottom: 8px;
+    color: #ccc;
+  }
+
+  .class-errors {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+  }
+
+  .class-error-card {
+    background: #2a2a4a;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 8px 10px;
+    text-align: center;
+  }
+
+  .class-error-card .class-name {
+    font-size: 12px;
+    color: #aaa;
+    margin-bottom: 2px;
+  }
+
+  .class-error-card .class-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+
+  .class-error-card .kl-value {
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .class-error-card .cell-count {
+    font-size: 10px;
+    color: #666;
+  }
+
+  .legend {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #aaa;
+  }
+
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    border: 1px solid #555;
+  }
+
+  .error-scale {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    font-size: 11px;
+    color: #888;
+  }
+
+  .error-scale .gradient {
+    width: 200px;
+    height: 14px;
+    border-radius: 2px;
+    border: 1px solid #555;
+  }
+
+  .loading {
+    text-align: center;
+    padding: 40px;
+    color: #888;
+    font-size: 16px;
+  }
+
+  .error-msg {
+    text-align: center;
+    padding: 40px;
+    color: #ff6b6b;
+    font-size: 14px;
+  }
+
+  /* Diff overlay checkbox */
+  .controls .checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .controls .checkbox-group input[type="checkbox"] {
+    accent-color: #4ecdc4;
+  }
+</style>
+</head>
+<body>
+
+<h1>Astar Island — Prediction Inspector</h1>
+<p class="subtitle">Side-by-side comparison of model predictions vs ground truth</p>
+
+<div id="app">
+  <div class="loading" id="loading-msg">Loading data.json...</div>
+</div>
+
+<div class="tooltip-container" id="tooltip"></div>
+
+<script>
+// ───────────────────────────────────────────────
+// Constants
+// ───────────────────────────────────────────────
+
+const TERRAIN_COLORS = [
+  '#a8d8ea',  // 0: Empty/Ocean/Plains — light blue
+  '#ff9933',  // 1: Settlement — orange
+  '#cc3333',  // 2: Port — red
+  '#888888',  // 3: Ruin — gray
+  '#33aa33',  // 4: Forest — green
+  '#665533',  // 5: Mountain — brown
+];
+
+const CLASS_NAMES = ['Empty', 'Settlement', 'Port', 'Ruin', 'Forest', 'Mountain'];
+
+const CELL_SIZE = 11;  // pixels per cell
+const GRID_DIM = 40;
+const CANVAS_SIZE = CELL_SIZE * GRID_DIM;
+
+// ───────────────────────────────────────────────
+// State
+// ───────────────────────────────────────────────
+
+let vizData = null;
+let currentRoundIdx = 0;
+let currentSeedIdx = 0;
+let showDiffOverlay = false;
+
+// Canvas refs
+let canvasInitial, canvasPred, canvasGT, canvasError;
+let ctxInitial, ctxPred, ctxGT, ctxError;
+
+// Current seed data (for tooltip)
+let currentSeed = null;
+
+// ───────────────────────────────────────────────
+// Data loading
+// ───────────────────────────────────────────────
+
+async function loadData() {
+  try {
+    const resp = await fetch('data.json');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    vizData = await resp.json();
+    initUI();
+  } catch (e) {
+    document.getElementById('loading-msg').innerHTML =
+      `<div class="error-msg">
+        Failed to load data.json: ${e.message}<br><br>
+        <small>Make sure to run:<br>
+        <code>cd tasks/astar-island && python viz/generate_viz_data.py</code><br>
+        Then serve:<br>
+        <code>cd tasks/astar-island/viz && python -m http.server 8080</code></small>
+      </div>`;
+  }
+}
+
+// ───────────────────────────────────────────────
+// UI initialization
+// ───────────────────────────────────────────────
+
+function initUI() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+
+  // ── Controls ──
+  const controls = document.createElement('div');
+  controls.className = 'controls';
+
+  // Round selector
+  const roundLabel = document.createElement('label');
+  roundLabel.textContent = 'Round:';
+  const roundSelect = document.createElement('select');
+  roundSelect.id = 'round-select';
+  vizData.rounds.forEach((rd, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `Round ${rd.round_num} (avg: ${rd.avg_score.toFixed(1)})`;
+    roundSelect.appendChild(opt);
+  });
+  roundSelect.addEventListener('change', () => {
+    currentRoundIdx = parseInt(roundSelect.value);
+    currentSeedIdx = 0;
+    updateSeedSelect();
+    render();
+  });
+
+  // Seed selector
+  const seedLabel = document.createElement('label');
+  seedLabel.textContent = 'Seed:';
+  const seedSelect = document.createElement('select');
+  seedSelect.id = 'seed-select';
+  seedSelect.addEventListener('change', () => {
+    currentSeedIdx = parseInt(seedSelect.value);
+    render();
+  });
+
+  // Score badge
+  const scoreBadge = document.createElement('span');
+  scoreBadge.className = 'score-badge';
+  scoreBadge.id = 'score-badge';
+
+  // Diff overlay toggle
+  const checkGroup = document.createElement('div');
+  checkGroup.className = 'checkbox-group';
+  const diffCheck = document.createElement('input');
+  diffCheck.type = 'checkbox';
+  diffCheck.id = 'diff-check';
+  diffCheck.addEventListener('change', () => {
+    showDiffOverlay = diffCheck.checked;
+    render();
+  });
+  const diffLabel = document.createElement('label');
+  diffLabel.textContent = 'Highlight disagreements';
+  diffLabel.htmlFor = 'diff-check';
+  checkGroup.appendChild(diffCheck);
+  checkGroup.appendChild(diffLabel);
+
+  controls.appendChild(roundLabel);
+  controls.appendChild(roundSelect);
+  controls.appendChild(seedLabel);
+  controls.appendChild(seedSelect);
+  controls.appendChild(scoreBadge);
+  controls.appendChild(checkGroup);
+  app.appendChild(controls);
+
+  // ── Legend ──
+  const legend = document.createElement('div');
+  legend.className = 'legend';
+  CLASS_NAMES.forEach((name, i) => {
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    const swatch = document.createElement('div');
+    swatch.className = 'legend-swatch';
+    swatch.style.background = TERRAIN_COLORS[i];
+    const label = document.createElement('span');
+    label.textContent = name;
+    item.appendChild(swatch);
+    item.appendChild(label);
+    legend.appendChild(item);
+  });
+  app.appendChild(legend);
+
+  // ── Error scale ──
+  const errorScale = document.createElement('div');
+  errorScale.className = 'error-scale';
+  errorScale.innerHTML = `
+    <span>KL Divergence: 0 (perfect)</span>
+    <canvas id="gradient-canvas" width="200" height="14" class="gradient"></canvas>
+    <span>2.0+ (very wrong)</span>
+  `;
+  app.appendChild(errorScale);
+
+  // ── Grid canvases ──
+  const gridsContainer = document.createElement('div');
+  gridsContainer.className = 'grids-container';
+
+  function makePanel(title, id) {
+    const panel = document.createElement('div');
+    panel.className = 'grid-panel';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'grid-title';
+    titleEl.textContent = title;
+    const canvas = document.createElement('canvas');
+    canvas.id = id;
+    canvas.width = CANVAS_SIZE;
+    canvas.height = CANVAS_SIZE;
+    panel.appendChild(titleEl);
+    panel.appendChild(canvas);
+    return { panel, canvas };
+  }
+
+  const p1 = makePanel('Initial State', 'canvas-initial');
+  const p2 = makePanel('Prediction (argmax)', 'canvas-pred');
+  const p3 = makePanel('Ground Truth (argmax)', 'canvas-gt');
+  const p4 = makePanel('KL Divergence Error', 'canvas-error');
+
+  gridsContainer.appendChild(p1.panel);
+  gridsContainer.appendChild(p2.panel);
+  gridsContainer.appendChild(p3.panel);
+  gridsContainer.appendChild(p4.panel);
+  app.appendChild(gridsContainer);
+
+  canvasInitial = p1.canvas;
+  canvasPred = p2.canvas;
+  canvasGT = p3.canvas;
+  canvasError = p4.canvas;
+
+  ctxInitial = canvasInitial.getContext('2d');
+  ctxPred = canvasPred.getContext('2d');
+  ctxGT = canvasGT.getContext('2d');
+  ctxError = canvasError.getContext('2d');
+
+  // ── Stats container ──
+  const statsContainer = document.createElement('div');
+  statsContainer.className = 'stats-container';
+  statsContainer.id = 'stats-container';
+  app.appendChild(statsContainer);
+
+  // ── Draw gradient ──
+  requestAnimationFrame(() => {
+    const gc = document.getElementById('gradient-canvas');
+    if (gc) {
+      const gctx = gc.getContext('2d');
+      const grad = gctx.createLinearGradient(0, 0, 200, 0);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.25, '#ffcc66');
+      grad.addColorStop(0.5, '#ff6633');
+      grad.addColorStop(1.0, '#cc0000');
+      gctx.fillStyle = grad;
+      gctx.fillRect(0, 0, 200, 14);
+    }
+  });
+
+  // ── Tooltip handling ──
+  const tooltip = document.getElementById('tooltip');
+  const allCanvases = [canvasInitial, canvasPred, canvasGT, canvasError];
+  allCanvases.forEach(c => {
+    c.addEventListener('mousemove', (e) => showTooltip(e, c));
+    c.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+  });
+
+  // ── Initialize ──
+  updateSeedSelect();
+  render();
+}
+
+function updateSeedSelect() {
+  const seedSelect = document.getElementById('seed-select');
+  if (!seedSelect) return;
+  seedSelect.innerHTML = '';
+  const rd = vizData.rounds[currentRoundIdx];
+  if (!rd) return;
+  rd.seeds.forEach((s, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `Seed ${s.seed} (score: ${s.score.toFixed(1)})`;
+    seedSelect.appendChild(opt);
+  });
+  seedSelect.value = currentSeedIdx;
+}
+
+// ───────────────────────────────────────────────
+// Rendering
+// ───────────────────────────────────────────────
+
+function render() {
+  const rd = vizData.rounds[currentRoundIdx];
+  if (!rd || !rd.seeds[currentSeedIdx]) return;
+  currentSeed = rd.seeds[currentSeedIdx];
+
+  // Update score badge
+  const badge = document.getElementById('score-badge');
+  if (badge) {
+    const s = currentSeed.score;
+    const color = s >= 90 ? '#4ecdc4' : s >= 80 ? '#ffcc66' : '#ff6b6b';
+    badge.innerHTML = `Score: <span class="value" style="color:${color}">${s.toFixed(2)}</span>`;
+  }
+
+  drawTerrainGrid(ctxInitial, currentSeed.initial_grid);
+  drawTerrainGrid(ctxPred, currentSeed.pred_argmax, showDiffOverlay ? currentSeed.gt_argmax : null);
+  drawTerrainGrid(ctxGT, currentSeed.gt_argmax);
+  drawErrorGrid(ctxError, currentSeed.kl_map);
+
+  renderStats();
+}
+
+function drawTerrainGrid(ctx, grid, diffGrid) {
+  const cs = CELL_SIZE;
+  for (let y = 0; y < GRID_DIM; y++) {
+    for (let x = 0; x < GRID_DIM; x++) {
+      const cls = grid[y][x];
+      ctx.fillStyle = TERRAIN_COLORS[cls] || '#000';
+      ctx.fillRect(x * cs, y * cs, cs, cs);
+
+      // Draw disagreement marker
+      if (diffGrid && diffGrid[y][x] !== cls) {
+        ctx.strokeStyle = '#ff00ff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x * cs + 1, y * cs + 1, cs - 2, cs - 2);
+      }
+
+      // Subtle grid lines
+      ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x * cs, y * cs, cs, cs);
+    }
+  }
+}
+
+function drawErrorGrid(ctx, klMap) {
+  const cs = CELL_SIZE;
+  const maxKL = 2.0;  // cap for color mapping
+  for (let y = 0; y < GRID_DIM; y++) {
+    for (let x = 0; x < GRID_DIM; x++) {
+      const kl = klMap[y][x];
+      const t = Math.min(kl / maxKL, 1.0);  // 0..1
+
+      // White -> yellow -> orange -> red
+      let r, g, b;
+      if (t < 0.25) {
+        const s = t / 0.25;
+        r = 255;
+        g = 255;
+        b = Math.round(255 * (1 - s));
+      } else if (t < 0.5) {
+        const s = (t - 0.25) / 0.25;
+        r = 255;
+        g = Math.round(255 - 102 * s);  // 255 -> 153
+        b = 0;
+      } else {
+        const s = (t - 0.5) / 0.5;
+        r = Math.round(255 - 51 * s);  // 255 -> 204
+        g = Math.round(153 - 153 * s);  // 153 -> 0
+        b = 0;
+      }
+
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(x * cs, y * cs, cs, cs);
+
+      // Grid lines
+      ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x * cs, y * cs, cs, cs);
+    }
+  }
+}
+
+// ───────────────────────────────────────────────
+// Stats
+// ───────────────────────────────────────────────
+
+function renderStats() {
+  const container = document.getElementById('stats-container');
+  if (!container || !currentSeed) return;
+
+  const pce = currentSeed.per_class_error;
+  let html = '<h3>Per-Class Error Breakdown</h3><div class="class-errors">';
+
+  CLASS_NAMES.forEach((name, i) => {
+    const data = pce[name] || { mean_kl: 0, max_kl: 0, count: 0 };
+    const klColor = data.mean_kl < 0.1 ? '#4ecdc4' : data.mean_kl < 0.5 ? '#ffcc66' : '#ff6b6b';
+    html += `
+      <div class="class-error-card">
+        <div class="class-name">
+          <span class="class-swatch" style="background:${TERRAIN_COLORS[i]}"></span>
+          ${name}
+        </div>
+        <div class="kl-value" style="color:${klColor}">${data.mean_kl.toFixed(3)}</div>
+        <div class="cell-count">${data.count} cells | max ${data.max_kl.toFixed(3)}</div>
+      </div>`;
+  });
+
+  html += '</div>';
+
+  // Summary row across all seeds in this round
+  const rd = vizData.rounds[currentRoundIdx];
+  if (rd && rd.seeds.length > 1) {
+    html += '<h3 style="margin-top:16px">All Seeds in This Round</h3>';
+    html += '<div class="class-errors">';
+    rd.seeds.forEach(s => {
+      const c = s.score >= 90 ? '#4ecdc4' : s.score >= 80 ? '#ffcc66' : '#ff6b6b';
+      html += `
+        <div class="class-error-card">
+          <div class="class-name">Seed ${s.seed}</div>
+          <div class="kl-value" style="color:${c}">${s.score.toFixed(2)}</div>
+        </div>`;
+    });
+    html += '</div>';
+  }
+
+  // Cross-round summary
+  if (vizData.rounds.length > 1) {
+    html += '<h3 style="margin-top:16px">Cross-Round Summary</h3>';
+    html += '<div class="class-errors">';
+    vizData.rounds.forEach(r => {
+      const c = r.avg_score >= 90 ? '#4ecdc4' : r.avg_score >= 80 ? '#ffcc66' : '#ff6b6b';
+      html += `
+        <div class="class-error-card">
+          <div class="class-name">Round ${r.round_num}</div>
+          <div class="kl-value" style="color:${c}">${r.avg_score.toFixed(2)}</div>
+          <div class="cell-count">${r.seeds.length} seeds</div>
+        </div>`;
+    });
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+// ───────────────────────────────────────────────
+// Tooltip
+// ───────────────────────────────────────────────
+
+function showTooltip(event, canvas) {
+  if (!currentSeed) return;
+  const tooltip = document.getElementById('tooltip');
+
+  const rect = canvas.getBoundingClientRect();
+  const mx = event.clientX - rect.left;
+  const my = event.clientY - rect.top;
+  const cellX = Math.floor(mx / CELL_SIZE);
+  const cellY = Math.floor(my / CELL_SIZE);
+
+  if (cellX < 0 || cellX >= GRID_DIM || cellY < 0 || cellY >= GRID_DIM) {
+    tooltip.style.display = 'none';
+    return;
+  }
+
+  const pred = currentSeed.pred_probs[cellY][cellX];
+  const gt = currentSeed.gt_probs[cellY][cellX];
+  const kl = currentSeed.kl_map[cellY][cellX];
+  const ent = currentSeed.entropy_map[cellY][cellX];
+  const initCls = currentSeed.initial_grid[cellY][cellX];
+
+  let html = `<div class="cell-coords">Cell (${cellX}, ${cellY}) — Initial: ${CLASS_NAMES[initCls]}</div>`;
+  html += '<table class="prob-table">';
+  html += '<tr><th>Class</th><th>Pred</th><th></th><th>GT</th><th></th></tr>';
+
+  CLASS_NAMES.forEach((name, i) => {
+    const pVal = pred[i];
+    const gVal = gt[i];
+    const pW = Math.round(pVal * 100);
+    const gW = Math.round(gVal * 100);
+    const color = TERRAIN_COLORS[i];
+    const diff = pVal - gVal;
+    const diffStr = diff > 0 ? `+${diff.toFixed(3)}` : diff.toFixed(3);
+    const diffColor = Math.abs(diff) < 0.01 ? '#666' : diff > 0 ? '#ff6b6b' : '#4ecdc4';
+
+    html += `<tr>
+      <td style="color:${color};font-weight:600">${name}</td>
+      <td>${pVal.toFixed(3)}</td>
+      <td class="bar-cell"><span class="prob-bar" style="width:${pW}px;background:${color};opacity:0.7"></span></td>
+      <td>${gVal.toFixed(3)}</td>
+      <td class="bar-cell"><span class="prob-bar" style="width:${gW}px;background:${color}"></span></td>
+    </tr>`;
+  });
+
+  html += '</table>';
+  html += `<div class="kl-line">KL: ${kl.toFixed(4)} | Entropy: ${ent.toFixed(4)}</div>`;
+
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
+
+  // Position tooltip near cursor, avoiding edge overflow
+  let tx = event.clientX + 16;
+  let ty = event.clientY + 16;
+  const tw = tooltip.offsetWidth;
+  const th = tooltip.offsetHeight;
+  if (tx + tw > window.innerWidth - 8) tx = event.clientX - tw - 16;
+  if (ty + th > window.innerHeight - 8) ty = event.clientY - th - 16;
+  tooltip.style.left = tx + 'px';
+  tooltip.style.top = ty + 'px';
+}
+
+// ───────────────────────────────────────────────
+// Boot
+// ───────────────────────────────────────────────
+
+loadData();
+</script>
+</body>
+</html>
