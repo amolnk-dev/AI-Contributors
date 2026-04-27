@@ -11,7 +11,7 @@ tar xzf /tmp/astar-deploy.tar.gz
 pip3 install --break-system-packages -q numpy scipy xgboost scikit-learn pydantic httpx 2>&1 | tail -1
 python3 -c 'import numpy,scipy,xgboost,sklearn,pydantic,httpx;print("imports OK")'
 VM_ID=$(hostname | sed 's/ainm-astar-//')
-export GOOGLE_API_KEY='AIzaSyDneTtqxEnKB3ZZeQ9MpPKeAxLyoWvbYQM'
+export GOOGLE_API_KEY='AIzxxxxxxxxbYQM'
 export MODEL_ID='gemini-3.1-flash-lite-preview'
 export PARALLEL_XGB='18'
 export VM_ID
