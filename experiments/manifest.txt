@@ -1,0 +1,12 @@
+emp40|train_emp40.py|EMP_BLEND=0.40
+emp45|train_emp45.py|EMP_BLEND=0.45
+emp55|train_emp55.py|EMP_BLEND=0.55
+blend_095|train_blend_095.py|all blend=0.95
+blend_090|train_blend_090.py|all blend=0.90
+l7_strong|train_l7_strong.py|L7 stronger [1.60, 1.20, 0, 0, 1.70, 0]
+l7_weak|train_l7_weak.py|L7 weaker [1.20, 0.80, 0, 0, 1.30, 0]
+l7_wide|train_l7_wide.py|L7 wider clamp [0.70-1.40]
+xgb_depth6|train_xgb_depth6.py|max_depth=6 all terrains
+xgb_800|train_xgb_800.py|n_estimators=800 all terrains
+xgb_lr005|train_xgb_lr005.py|learning_rate=0.05 (slower)
+baseline|train_baseline.py|BASELINE (no changes)
