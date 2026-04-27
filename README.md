@@ -1,4 +1,4 @@
-# Astar Island — Viking Civilisation Prediction
+# Island Astar — Viking Civilisation Prediction
 
 **Weight**: 25% of total score
 **Type**: Observation + probabilistic prediction (REST API client)
