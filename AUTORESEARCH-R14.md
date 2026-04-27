@@ -1,9 +1,9 @@
 # Autoresearch Session: R14 Era (2026-03-21)
 
-## What We're Doing
+## What We are Doing
 
 Running 3 parallel autonomous Claude agents, each in an isolated git worktree,
-to improve the Astar Island prediction model. Each agent follows the same
+to improve the Island Astar prediction model. Each agent follows the same
 autoresearch protocol but targets a different improvement axis.
 
 ## The Autoresearch Pattern
@@ -66,7 +66,7 @@ R8  = 93.94  ← extinction
 R4  = 94.20  ← extinction
 ```
 
-**Pattern: We're strong on extinction rounds, weak on high expansion rounds.**
+**Pattern: We are strong on extinction rounds, weak on high expansion rounds.**
 
 ## The Three Agents
 
@@ -75,7 +75,7 @@ R4  = 94.20  ← extinction
 **Goal:** Improve scores on R6 (86.5), R7 (71.8), R11 (86.1) — our 3 weakest rounds.
 
 **Why these are weak:** High expansion rounds have settlements spreading far from
-initial positions. Our distance-based heuristic tables were calibrated on all rounds
+initial positions. Our distance based heuristic tables were calibrated on all rounds
 including extinction rounds, which biases toward less expansion.
 
 **Ideas to try:**
@@ -98,7 +98,7 @@ including extinction rounds, which biases toward less expansion.
 
 **Goal:** Extract more information from observations about the simulation's hidden parameters.
 
-**The simulation has hidden forces we're not fully modelling:**
+**The simulation has hidden forces we are not fully modelling:**
 
 #### Raiding Mechanics
 - Settlements raid each other; longships extend range
