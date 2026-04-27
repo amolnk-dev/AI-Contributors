@@ -1,0 +1,90 @@
+"""NorgesGruppen Object Detection — Auto-generated inference config."""
+
+import argparse
+import json
+from pathlib import Path
+
+import numpy as np
+import torch
+
+_torch_load = torch.load
+torch.load = lambda *args, **kwargs: _torch_load(*args, **{**kwargs, "weights_only": False})
+
+from ultralytics import YOLO
+from ensemble_boxes import weighted_boxes_fusion
+from PIL import Image
+
+
+def run_at_scale(model, img_path, device, imgsz, augment=False, conf=0.01, iou=0.7):
+    results = model(
+        str(img_path), device=device, verbose=False,
+        imgsz=imgsz, conf=conf, iou=iou, max_det=500, augment=augment,
+    )
+    boxes_norm, scores, labels = [], [], []
+    for r in results:
+        if r.boxes is None or len(r.boxes) == 0:
+            continue
+        img_h, img_w = r.orig_shape
+        for i in range(len(r.boxes)):
+            x1, y1, x2, y2 = r.boxes.xyxy[i].tolist()
+            boxes_norm.append([max(0,x1/img_w), max(0,y1/img_h), min(1,x2/img_w), min(1,y2/img_h)])
+            scores.append(float(r.boxes.conf[i].item()))
+            labels.append(int(r.boxes.cls[i].item()))
+    return boxes_norm, scores, labels
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output", required=True)
+    args = parser.parse_args()
+
+    input_dir = Path(args.input)
+    output_path = Path(args.output)
+    model_path = Path(__file__).parent / "best.pt"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = YOLO(str(model_path))
+
+    predictions = []
+    image_files = sorted(p for p in input_dir.iterdir() if p.suffix.lower() in (".jpg", ".jpeg", ".png"))
+
+    for img_path in image_files:
+        image_id = int(img_path.stem.split("_")[-1])
+        img = Image.open(img_path)
+        img_w, img_h = img.size
+
+        all_boxes, all_scores, all_labels = [], [], []
+
+        boxes, scores, labels = run_at_scale(model, img_path, device, 960, augment=False)
+        if boxes:
+            all_boxes.append(boxes); all_scores.append(scores); all_labels.append(labels)
+        boxes, scores, labels = run_at_scale(model, img_path, device, 1280, augment=False)
+        if boxes:
+            all_boxes.append(boxes); all_scores.append(scores); all_labels.append(labels)
+        boxes, scores, labels = run_at_scale(model, img_path, device, 1280, augment=True)
+        if boxes:
+            all_boxes.append(boxes); all_scores.append(scores); all_labels.append(labels)
+        if not all_boxes:
+            continue
+
+        fused_boxes, fused_scores, fused_labels = weighted_boxes_fusion(
+            all_boxes, all_scores, all_labels,
+            iou_thr=0.55, skip_box_thr=0.0001, weights=[1, 2, 3],
+        )
+
+        for box, score, label in zip(fused_boxes, fused_scores, fused_labels):
+            x1, y1 = box[0]*img_w, box[1]*img_h
+            x2, y2 = box[2]*img_w, box[3]*img_h
+            predictions.append({
+                "image_id": image_id, "category_id": int(label),
+                "bbox": [round(x1,1), round(y1,1), round(x2-x1,1), round(y2-y1,1)],
+                "score": round(float(score), 4),
+            })
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(predictions, f)
+    print(f"Wrote {len(predictions)} predictions for {len(image_files)} images")
+
+if __name__ == "__main__":
+    main()

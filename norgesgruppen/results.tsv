@@ -1,0 +1,19 @@
+timestamp	name	val_metric	model_size_mb	duration_min	status	notes
+2026-03-19 23:12	yolov8m-baseline	0.6894	299.0	0.0	kept	first submission, single-scale
+2026-03-19 23:46	yolov8m-tweaked	0.6915	299.0	0.0	kept	conf=0.001, iou=0.6, max_det=500
+2026-03-19 23:49	yolov8m-wbf-3pass	0.0000	299.0	0.0	failed	model.half() crashed sandbox
+2026-03-20 07:25	yolov8l-wbf-3pass	0.8719	84.0	180.4	kept	3-pass WBF, held-out test score
+2026-03-20 09:24	yolov8l-wbf-skip01	0.8823	84.0	132.4	kept	optimized WBF skip_thr=0.01
+2026-03-20 11:10	yolov8l-wbf-live	0.8966	84.0	0.0	kept	LIVE SCORE — first YOLOv8l submission
+2026-03-20 11:42	yolov8l-precision	0.8831	84.0	123.4	kept	bbox round(2), score round(6)
+2026-03-20 14:04	yolov8l-vm-variant	0.9007	84.0	0.0	kept	LIVE SCORE — new best live!
+2026-03-20 14:21	yolov8l-swa	0.8663	84.2	140.1	rejected	SWA avg of 3 checkpoints, marginal
+2026-03-20 18:13	yolov8l-cls1.5-full	0.9040	84.2	0.0	kept	LIVE SCORE — cls=1.5, full dataset
+2026-03-20 21:06	yolov8l-cls1.5-v2	0.9055	84.2	42.6	kept	LIVE SCORE — new checkpoint, best live!
+2026-03-20 22:17	fast-2stage-convnext	0.8941	200.8	64.5	rejected	LIVE — classifier hurt classification mAP
+2026-03-21 01:03	yolov8l-sgd-cos-seed9	0.9040	84.1	42.9	rejected	LIVE — SGD/cosine/300ep, no improvement
+2026-03-21 09:41	yolov8l-iou065-avg	0.9126	84.1	44.8	kept	LIVE — NEW BEST! iou=0.65+conf_type=avg fix
+2026-03-21 09:52	yolov8l-variant	0.9057	84.2	45.1	rejected	LIVE — different checkpoint, worse
+2026-03-21 10:36	yolov8l-a100-9	0.9129	84.1	42.4	kept	LIVE — a100-9 model, old WBF params
+2026-03-21 11:24	3model-ensemble	0.9173	233.0	72.2	kept	LIVE — 3-model ensemble works!
+2026-03-21 12:05	3model-hybrid	0.9208	233.0	64.3	kept	LIVE — NEW BEST! hybrid ensemble, select for final

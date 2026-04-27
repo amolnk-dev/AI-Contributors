@@ -1,0 +1,8 @@
+# Training environment — pin to match sandbox versions
+ultralytics==8.1.0
+torch==2.6.0
+torchvision==0.21.0
+pycocotools>=2.0.7
+albumentations>=1.3.1
+numpy>=1.26.4
+Pillow>=10.2.0
