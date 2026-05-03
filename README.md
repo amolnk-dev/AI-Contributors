@@ -1,4 +1,4 @@
-# School of ArtificialIntelligence
+# School of AI
 Copyright (c) 2026 AI contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal
